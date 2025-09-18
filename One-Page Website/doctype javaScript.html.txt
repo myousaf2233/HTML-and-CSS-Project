@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>One‑Page Site with Lightbox Gallery</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#10b981;color-scheme:dark}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:var(--bg);color:#e6eef6;line-height:1.4}
+    .wrap{max-width:1100px;margin:40px auto;padding:24px}
+    h1{text-align:center;margin-top:0}
+
+    /* Gallery grid */
+    .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+    .gallery button{background:none;border:0;padding:0;cursor:pointer;border-radius:10px;overflow:hidden;display:block}
+    .gallery img{width:100%;height:140px;object-fit:cover;display:block;transition:transform .25s ease}
+    .gallery button:focus img{outline:3px solid rgba(16,185,129,.18);transform:scale(1.03)}
+
+    /* Modal / Lightbox */
+    .lightbox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.8);z-index:1200}
+    .lightbox.open{display:flex}
+    .lb-content{position:relative;max-width:95%;max-height:92%;width:980px;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px}
+    .lb-stage{display:flex;align-items:center;justify-content:center;min-height:280px;max-height:68vh}
+    .lb-stage img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;display:block}
+    .caption{font-size:0.95rem;color:#cfeee2}
+
+    /* Controls */
+    .controls{display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);color:inherit;padding:8px 12px;border-radius:10px;cursor:pointer}
+    .btn:focus{outline:3px solid rgba(16,185,129,.18)}
+    .nav{display:flex;gap:8px}
+    .nav .icon{font-size:1.1rem}
+
+    /* Prev/Next floating buttons */
+    .nav-floating{position:absolute;left:10px;right:10px;top:50%;transform:translateY(-50%);display:flex;justify-content:space-between;pointer-events:none}
+    .nav-floating button{pointer-events:auto;background:rgba(0,0,0,.35);border:0;color:#fff;padding:10px;border-radius:50%;backdrop-filter:blur(4px)}
+
+    /* Responsive tweaks */
+    @media (max-width:640px){
+      .gallery img{height:110px}
+      .lb-content{width:95%;padding:12px}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Project — Image Gallery (Lightbox)</h1>
+    <p style="text-align:center;opacity:.85">Click any image to open the lightbox. Use the arrow keys to navigate, Esc to close.</p>
+
+    <section class="gallery" aria-label="Project images">
+      <!-- Replace the src values with your local image paths or project images -->
+      <button data-index="0" aria-label="Open image 1"><img src="https://picsum.photos/id/1018/800/600" alt="Mountains at sunrise" data-caption="Mountains at sunrise"></button>
+      <button data-index="1" aria-label="Open image 2"><img src="https://picsum.photos/id/1025/800/600" alt="Golden retriever" data-caption="Happy golden retriever"></button>
+      <button data-index="2" aria-label="Open image 3"><img src="https://picsum.photos/id/1027/800/600" alt="Urban skyline" data-caption="City skyline at dusk"></button>
+      <button data-index="3" aria-label="Open image 4"><img src="https://picsum.photos/id/1035/800/600" alt="Forest trail" data-caption="Misty forest trail"></button>
+      <button data-index="4" aria-label="Open image 5"><img src="https://picsum.photos/id/1069/800/600" alt="Beach" data-caption="Waves on a quiet beach"></button>
+      <button data-index="5" aria-label="Open image 6"><img src="https://picsum.photos/id/1074/800/600" alt="Desert" data-caption="Desert dunes at golden hour"></button>
+    </section>
+  </main>
+
+  <!-- Lightbox modal -->
+  <div class="lightbox" role="dialog" aria-modal="true" aria-hidden="true" id="lightbox">
+    <div class="lb-content" role="document">
+      <div class="lb-stage" id="lb-stage">
+        <img src="" alt="" id="lb-image">
+        <div class="nav-floating" aria-hidden="true">
+          <button id="prev-btn" title="Previous (Left arrow)" aria-label="Previous image">◀</button>
+          <button id="next-btn" title="Next (Right arrow)" aria-label="Next image">▶</button>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="caption" id="lb-caption"></div>
+        <div class="nav">
+          <button class="btn" id="download-btn">Download</button>
+          <button class="btn" id="close-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const gallery = document.querySelectorAll('.gallery button');
+      const lightbox = document.getElementById('lightbox');
+      const lbImage = document.getElementById('lb-image');
+      const lbCaption = document.getElementById('lb-caption');
+      const closeBtn = document.getElementById('close-btn');
+      const prevBtn = document.getElementById('prev-btn');
+      const nextBtn = document.getElementById('next-btn');
+      const downloadBtn = document.getElementById('download-btn');
+
+      let currentIndex = 0;
+      const items = Array.from(gallery).map(btn => {
+        const img = btn.querySelector('img');
+        return {src: img.src, alt: img.alt || '', caption: img.dataset.caption || ''};
+      });
+
+      function open(index){
+        currentIndex = index;
+        show(currentIndex);
+        lightbox.classList.add('open');
+        lightbox.setAttribute('aria-hidden','false');
+        document.body.style.overflow = 'hidden'; // prevent background scroll
+        // focus management: move focus to close button
+        closeBtn.focus();
+      }
+
+      function close(){
+        lightbox.classList.remove('open');
+        lightbox.setAttribute('aria-hidden','true');
+        document.body.style.overflow = '';
+        // return focus to the last thumbnail
+        const thumb = document.querySelector(`.gallery button[data-index="${currentIndex}"]`);
+        if(thumb) thumb.focus();
+      }
+
+      function show(index){
+        const item = items[index];
+        lbImage.src = item.src;
+        lbImage.alt = item.alt;
+        lbCaption.textContent = item.caption || `Image ${index+1} of ${items.length}`;
+        // update download link
+        downloadBtn.onclick = () => { const a = document.createElement('a'); a.href = item.src; a.download = item.src.split('/').pop() || `image-${index+1}.jpg`; document.body.appendChild(a); a.click(); a.remove(); };
+      }
+
+      function next(){ currentIndex = (currentIndex+1) % items.length; show(currentIndex); }
+      function prev(){ currentIndex = (currentIndex-1 + items.length) % items.length; show(currentIndex); }
+
+      // Attach listeners
+      gallery.forEach((btn,i)=> btn.addEventListener('click', ()=> open(i)));
+      closeBtn.addEventListener('click', close);
+      nextBtn.addEventListener('click', next);
+      prevBtn.addEventListener('click', prev);
+
+      // close on backdrop click (but not when clicking inside lb-content)
+      lightbox.addEventListener('click', (e)=>{ if(e.target === lightbox) close(); });
+
+      // keyboard navigation
+      document.addEventListener('keydown', (e)=>{
+        if(lightbox.classList.contains('open')){
+          if(e.key === 'Escape') close();
+          if(e.key === 'ArrowRight') next();
+          if(e.key === 'ArrowLeft') prev();
+        }
+      });
+
+      // accessibility: trap focus inside modal (simple)
+      lightbox.addEventListener('keydown', (e)=>{
+        if(e.key === 'Tab'){
+          const focusable = lightbox.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          if(focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length-1];
+          if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+          else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+        }
+      });
+
+      // make sure images resize smoothly
+      lbImage.addEventListener('load', ()=>{ /* placeholder for potential transitions */ });
+
+      // expose to window for debugging (optional)
+      window.lightboxGallery = {open,close,next,prev};
+    })();
+  </script>
+</body>
+</html>
